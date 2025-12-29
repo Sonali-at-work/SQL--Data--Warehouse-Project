@@ -1,1 +1,448 @@
+USE [DATAWAREHOUSE]
+GO
+/****** Object:  StoredProcedure [silver].[load_silver]    Script Date: 29-12-2025 12:46:37 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER   PROCEDURE [silver].[load_silver] AS
+BEGIN
+DECLARE @start_time DATETIME ,@end_time DATETIME ,@batch_start_time DATETIME ,@batch_end_time DATETIME
+BEGIN TRY
+SET @batch_start_time= GETDATE()
+PRINT'========================================================='
+PRINT 'Loading Silver Layer'
+PRINT'========================================================='
+
+--================================ olist_customers ========================================
+SET @start_time=GETDATE()
+
+PRINT '>>Truncating Table silver.olist_customers'
+TRUNCATE TABLE  silver.olist_customers
+PRINT '>>Insert Data INTO silver.olist_customers'
+Insert into silver.olist_customers
+	(customer_id,
+	customer_unique_id,
+	customer_zip_code_prefix,
+	customer_city,
+	customer_state
+)
+select 
+	customer_id,
+	customer_unique_id,
+	case when 
+		customer_zip_code_prefix is not null then RIGHT('00000' + TRIM(CAST(customer_zip_code_prefix AS VARCHAR(5))), 5) 
+		else null
+		end as customer_zip_code_prefix,
+	upper(trim(customer_city))as customer_city,
+	upper(trim(customer_state))as customer_state
+from(select 
+	row_number () over (partition by customer_unique_id order by
+	customer_unique_id) as rn ,*
+from bronze.olist_customers)as t where rn=1
+
+
+SET @end_time =GETDATE()
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@start_time,@end_time)as NVARCHAR)+'SECONDS';
+PRINT '>>--------------------------------------'
+
+--================================ olist_orders ========================================
+SET @start_time=GETDATE()
+
+PRINT '>>Truncating Table silver.olist_orders'
+TRUNCATE TABLE  silver.olist_orders
+PRINT '>>Insert Data INTO silver.olist_orders'
+
+
+Insert into silver.olist_orders 
+(   order_id,
+	customer_id,
+	order_status,
+	order_purchase_timestamp,
+	order_approved_at,
+	order_delivered_carrier_date,
+	order_delivered_customer_date,
+	order_estimated_delivery_date,
+	Flag_carrier_after_customer,
+	diff_hours_carrier_to_customer,
+	Flag_delivered_after_estimated,
+	diff_hours_delivered_to_estimated,
+	Overall_Flag_any_Delivery_Issue
+	)
+select 
+order_id,
+customer_id,
+order_status,
+order_purchase_ts ,
+order_approved_ts ,
+order_delivered_carrier_ts ,
+order_delivered_customer_ts ,
+order_estimated_delivery_ts ,
+--FLAG 1 
+CASE WHEN order_delivered_carrier_ts is not null 
+          and order_delivered_customer_ts is not null 
+		  and (order_delivered_carrier_ts > order_delivered_customer_ts)
+	 THEN 1 ELSE 0 
+END AS Flag_carrier_after_customer,
+--2
+CASE WHEN order_delivered_carrier_ts is not null 
+          and order_delivered_customer_ts is not null 
+		  and (order_delivered_carrier_ts > order_delivered_customer_ts)
+		  THEN DATEDIFF(HOUR,
+		                order_delivered_carrier_ts,
+						order_delivered_customer_ts)
+		  ELSE  NULL
+END  AS diff_hours_carrier_to_customer,
+--FLAG 3
+CASE WHEN order_delivered_customer_ts is not null 
+		  and order_estimated_delivery_ts is not null
+		  and (order_delivered_customer_ts > order_estimated_delivery_ts)
+     THEN 1 ELSE 0
+END AS Flag_delivered_after_estimated,
+--4
+CASE WHEN order_delivered_customer_ts is not null 
+          and order_estimated_delivery_ts  is not null 
+		  and (order_delivered_customer_ts > order_estimated_delivery_ts)
+		  THEN DATEDIFF(HOUR,
+		                order_delivered_customer_ts,
+						order_estimated_delivery_ts)
+		  ELSE  NULL
+END  AS diff_hours_delivered_to_estimated,
+-- OVERALL FLAG
+CASE WHEN (order_delivered_carrier_ts is not null 
+		 and order_delivered_customer_ts is not null 
+		 and (order_delivered_carrier_ts > order_delivered_customer_ts))
+		 OR
+		 (order_delivered_customer_ts is not null 
+		 and order_estimated_delivery_ts is not null
+		 and (order_delivered_customer_ts > order_estimated_delivery_ts))
+     THEN 1 
+	 ELSE 0 
+END AS Overall_Flag_any_Delivery_Issue
+from (
+	select *,
+	TRY_CAST(order_purchase_timestamp AS DATETIME) AS order_purchase_ts,
+    TRY_CAST(order_approved_at AS DATETIME) AS order_approved_ts,
+    TRY_CAST(order_delivered_carrier_date AS DATETIME) AS order_delivered_carrier_ts,
+    TRY_CAST(order_delivered_customer_date AS DATETIME) AS order_delivered_customer_ts,
+    TRY_CAST(order_estimated_delivery_date AS DATETIME) AS order_estimated_delivery_ts,
+	row_number ()
+	over (partition by order_id order by order_id) as rn from bronze.olist_orders)as t 
+	where rn =1
+
+SET @end_time =GETDATE()
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@start_time,@end_time)as NVARCHAR)+'SECONDS';
+PRINT '>>--------------------------------------'
+
+--================================ olist_products ========================================
+SET @start_time=GETDATE()
+
+PRINT '>>Truncating Table silver.olist_products'
+TRUNCATE TABLE  silver.olist_products
+PRINT '>>Insert Data INTO silver.olist_products'
+insert into silver.olist_products
+(
+	product_id,
+	product_category_name,
+	product_name_lenght,
+	product_description_lenght,
+	product_photos_qty,
+	product_weight_g,
+	product_length_cm,
+	product_height_cm,
+	product_width_cm
+
+)select 
+product_id,
+product_category_name,
+case 
+	when product_name_lenght >0  then product_name_lenght 
+	else null
+end as product_name_lenght,
+case 
+	when  product_description_lenght>0 then product_description_lenght
+	else null
+end as product_description_lenght,
+case
+	when product_photos_qty >=0 then product_photos_qty
+	else null
+end as product_photos_qty,
+case 
+	when product_weight_g >0 then product_weight_g
+	else null
+end as product_weight_g,
+case when product_length_cm >0 then product_length_cm
+    else null
+end as product_length_cm,
+case 
+	when product_height_cm >0 then product_height_cm
+	else null
+end as product_height_cm,
+case 
+	when product_width_cm >0  then product_width_cm
+	else null
+end as product_width_cm from (
+select *,row_number ()
+over (partition by product_id order by product_id) as rn from bronze.olist_products)as t where rn =1
+
+SET @end_time =GETDATE()
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@start_time,@end_time)as NVARCHAR)+'SECONDS';
+PRINT '>>--------------------------------------'
+
+--================================ olist_order_items ========================================
+
+SET @start_time=GETDATE()
+
+PRINT '>>Truncating Table silver.olist_order_items'
+TRUNCATE TABLE  silver.olist_order_items
+PRINT '>>Insert Data INTO silver.olist_order_items'
+insert into silver.olist_order_items(
+	order_id,
+	order_item_id,
+	product_id,
+	seller_id,
+	shipping_limit_date,
+	price,
+	freight_value
+)
+select 
+	order_id,
+	order_item_id,
+	product_id,
+	seller_id,
+	try_cast(shipping_limit_date as datetime) as shipping_limit_date,
+	case 
+		when price>0 then price 
+		else null 
+	end as price,
+	case 
+		when freight_value >=0 then freight_value 
+		else null 
+	end as freight_value
+from (select  row_number() 
+	over(partition by order_id,order_item_id order by order_item_id)as rn,*
+from bronze.olist_order_items )t where rn =1 
+
+SET @end_time =GETDATE()
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@start_time,@end_time)as NVARCHAR)+'SECONDS';
+PRINT '>>--------------------------------------'
+
+--================================ olist_order_payments ========================================
+
+SET @start_time=GETDATE()
+
+PRINT '>>Truncating Table silver.olist_order_payments'
+TRUNCATE TABLE  silver.olist_order_payments
+PRINT '>>Insert Data INTO silver.olist_order_payments'
+
+insert into silver.olist_order_payments
+(
+    order_id,
+    payment_sequential,
+    payment_type,
+    payment_installments,
+    payment_value
+)
+select 
+        order_id,
+        payment_sequential,
+        lower(trim(payment_type))as payment_type,
+        CASE 
+            WHEN payment_installments >= 0 THEN payment_installments
+            ELSE NULL
+        END AS  payment_installments,
+        CASE 
+            WHEN payment_value >= 0 THEN payment_value
+            ELSE NULL
+        END AS payment_value 
+from (
+    select row_number()over 
+        (partition by order_id,payment_sequential  
+        order by payment_sequential) as rn ,*
+    from bronze.olist_order_payments )t
+where rn = 1
+
+SET @end_time =GETDATE()
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@start_time,@end_time)as NVARCHAR)+'SECONDS';
+PRINT '>>--------------------------------------'
+
+--================================ olist_order_reviews ========================================
+
+SET @start_time=GETDATE()
+
+PRINT '>>Truncating Table silver.olist_order_reviews'
+TRUNCATE TABLE  silver.olist_order_reviews
+PRINT '>>Insert Data INTO silver.olist_order_reviews'
+
+Insert into silver.olist_order_reviews (
+	review_id,
+	order_id,
+	review_score,
+	review_comment_title,
+	review_comment_message,
+	review_creation_date,
+	review_answer_timestamp
+) 
+select 
+	review_id,
+	order_id,
+	case 
+		when review_score  in(1,2,3,4,5) then review_score 
+		else null
+	end as review_score,
+	NULLIF(TRIM(review_comment_title),' ') as review_comment_title,
+	NULLIF(TRIM(review_comment_message),' ') as review_comment_message,
+	TRY_CAST(review_creation_date as datetime) as review_creation_date,
+	TRY_CAST(review_answer_timestamp as datetime) as review_answer_timestamp
+from(
+	select row_number() over (partition by review_id order by review_id ) as rn ,* from bronze.olist_order_reviews
+) t where rn=1 
+
+
+SET @end_time =GETDATE()
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@start_time,@end_time)as NVARCHAR)+'SECONDS';
+PRINT '>>--------------------------------------'
+
+--================================ olist_sellers ========================================
+
+SET @start_time=GETDATE()
+
+PRINT '>>Truncating Table silver.olist_sellers'
+TRUNCATE TABLE  silver.olist_sellers
+PRINT '>>Insert Data INTO silver.olist_sellers'
+
+Insert into silver.olist_sellers
+(
+	seller_id,
+	seller_zip_code_prefix,
+	seller_city,
+	seller_state
+)select seller_id,
+CASE
+        WHEN seller_zip_code_prefix IS NULL THEN NULL
+        ELSE RIGHT(
+            '00000' + CAST(seller_zip_code_prefix AS VARCHAR(5)),5
+        )
+    END AS seller_zip_code_prefix,
+CASE
+    WHEN seller_city LIKE '%[0-9]%' THEN NULL
+    ELSE UPPER(TRIM(seller_city))
+END AS seller_city ,
+CASE
+        WHEN seller_state IS NULL THEN NULL
+        WHEN TRIM(seller_state) = '' THEN NULL
+        WHEN LEN(TRIM(seller_state)) <> 2 THEN NULL
+        WHEN UPPER(seller_state) NOT IN (
+            'AC','AL','AP','AM','BA','CE','DF','ES','GO',
+            'MA','MT','MS','MG','PA','PB','PR','PE','PI',
+            'RJ','RN','RS','RO','RR','SC','SP','SE','TO'
+        ) THEN NULL
+        ELSE UPPER(seller_state)
+    END AS seller_state
+   from(
+select row_number() over (partition by seller_id order by seller_id ) as rn ,* from bronze.olist_sellers
+) t where rn=1 
+
+SET @end_time =GETDATE()
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@start_time,@end_time)as NVARCHAR)+'SECONDS';
+PRINT '>>--------------------------------------'
+
+--================================ olist_geolocation ========================================
+
+SET @start_time=GETDATE()
+
+PRINT '>>Truncating Table silver.olist_geolocation'
+TRUNCATE TABLE  silver.olist_geolocation
+PRINT '>>Insert Data INTO silver.olist_geolocation'
+
+INSERT INTO silver.olist_geolocation
+( 
+	geolocation_zip_code_prefix,
+	geolocation_lat,
+	geolocation_lng,
+	geolocation_city,
+	geolocation_state
+)SELECT 
+CASE 
+    WHEN geolocation_zip_code_prefix IS NULL THEN NULL
+	WHEN  TRY_CAST(geolocation_zip_code_prefix AS INT) IS NULL
+	  AND geolocation_zip_code_prefix IS NOT NULL THEN NULL
+	WHEN LEN(geolocation_zip_code_prefix)<>4 THEN NULL
+	ELSE geolocation_zip_code_prefix
+END AS geolocation_zip_code_prefix,
+
+CASE 
+    WHEN geolocation_lat IS NULL THEN NULL
+	WHEN TRY_CAST(geolocation_lat AS FLOAT) IS NULL
+	  AND geolocation_lat IS NOT NULL THEN NULL
+	WHEN geolocation_lat  NOT BETWEEN -90 and +90 THEN NULL
+	ELSE geolocation_lat 
+END AS geolocation_lat,
+
+CASE 
+    WHEN geolocation_lng IS NULL THEN NULL
+	WHEN geolocation_lng NOT BETWEEN -180 and +180 THEN NULL
+	ELSE geolocation_lng 
+END AS geolocation_lng,
+
+CASE 
+    WHEN geolocation_city IS NULL THEN NULL
+	WHEN geolocation_city LIKE '%[0-9]%' THEN NULL
+	ELSE UPPER(TRIM(geolocation_city)) 
+END AS geolocation_city,
+
+CASE 
+	WHEN geolocation_state IS NULL THEN  NULL
+	WHEN TRIM(geolocation_state) = '' THEN NULL
+	WHEN LEN(TRIM(geolocation_state))<>2 THEN NULL
+	WHEN geolocation_state NOT IN (                   
+			'AC','AL','AP','AM','BA','CE','DF','ES','GO',
+			'MA','MT','MS','MG','PA','PB','PR','PE','PI',
+			'RJ','RN','RS','RO','RR','SC','SP','SE','TO') THEN NULL
+	ELSE UPPER(geolocation_state)
+END AS geolocation_state
+from bronze.olist_geolocation
+
+SET @end_time =GETDATE()
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@start_time,@end_time)as NVARCHAR)+'SECONDS';
+PRINT '>>--------------------------------------'
+
+--================================ product_category_translation ========================================
+
+SET @start_time=GETDATE()
+
+PRINT '>>Truncating Table silver.product_category_translation'
+TRUNCATE TABLE  silver.product_category_translation
+PRINT '>>Insert Data INTO silver.product_category_translation'
+
+INSERT INTO silver.product_category_translation
+(
+product_category_name ,
+product_category_name_english 
+)
+select *
+from bronze.product_category_translation
+
+SET @end_time =GETDATE()
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@start_time,@end_time)as NVARCHAR)+'SECONDS';
+PRINT '>>--------------------------------------'
+
+--=========================================================================================================
+SET  @batch_end_time = GETDATE()
+PRINT '========================================================================'
+PRINT 'Loading Silver layer is completed.'
+PRINT '>>Load Duration:'+cast(DATEDIFF(SECOND,@batch_start_time,@batch_end_time)as NVARCHAR)+'SECONDS';
+PRINT '======================================================================='
+
+END TRY
+BEGIN CATCH 
+PRINT '========================================================================'
+PRINT 'Error occurred during load time'
+PRINT 'Error Message' +  ERROR_MESSAGE()
+PRINT 'Error Message' + CAST  (ERROR_NUMBER() as NVARCHAR);
+PRINT 'Error Message' + CAST  (ERROR_STATE() as NVARCHAR);
+PRINT '========================================================================'
+END CATCH
+
+END
 
