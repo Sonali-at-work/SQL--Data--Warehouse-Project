@@ -45,22 +45,6 @@ This repository showcases expertise in:
 - Analytics & Reporting  
 
 ---
-
-## 🗂 Repository Structure
-
-```text
-datasets/        → Source data
-scripts/         → SQL scripts (ETL, modeling, QA)
-docs/            → Architecture & data dictionary
-tests/           → Data quality checks
-README.md        → Project overview
-
-🚀 Project Requirements
-Building the Data Warehouse (Data Engineering)
-Objective
-
-Develop a modern data warehouse using SQL Server to consolidate sales data, enabling analytical reporting and informed decision-making.
-
 🧩 Data Modeling
 Overview
 
@@ -304,7 +288,14 @@ Payment method and installment analysis
 
 The use of a Fact Constellation schema ensures scalability, clarity, and professional-grade data warehouse design.
 
+## 🗂 Repository Structure
 
+```text
+datasets/        → Source data
+scripts/         → SQL scripts (ETL, modeling, QA)
+docs/            → Architecture & data dictionary
+tests/           → Data quality checks
+README.md        → Project overview
 
 data-warehouse-project/
 │
