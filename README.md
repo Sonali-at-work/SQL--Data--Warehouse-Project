@@ -304,6 +304,8 @@ Payment method and installment analysis
 
 The use of a Fact Constellation schema ensures scalability, clarity, and professional-grade data warehouse design.
 
+
+
 data-warehouse-project/
 │
 ├── datasets/
