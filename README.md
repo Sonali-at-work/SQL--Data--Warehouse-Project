@@ -73,11 +73,11 @@ Shared dimensions reused across multiple facts
 
 This is intentionally not a single star schema, because the business processes operate at different granularities.
 
-### Dimension Tables
+## Dimension Tables
 
 Dimensions store descriptive attributes and use surrogate keys for analytical joins.
 
-1. gold.dim_customers
+### 1. gold.dim_customers
 
 Grain: One row per customer
 
