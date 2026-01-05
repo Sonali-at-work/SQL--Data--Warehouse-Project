@@ -45,7 +45,7 @@ This repository showcases expertise in:
 - Analytics & Reporting  
 
 ---
-🧩 Data Modeling
+### Data Modeling
 Overview
 
 The Gold layer follows a dimensional modeling approach optimized for analytical and reporting use cases.
@@ -59,7 +59,7 @@ High query performance
 
 Clear separation of business entities (dimensions) and measurable events (facts)
 
-📐 Schema Type
+### Schema Type
 
 Fact Constellation (Galaxy Schema)
 
@@ -73,7 +73,7 @@ Shared dimensions reused across multiple facts
 
 This is intentionally not a single star schema, because the business processes operate at different granularities.
 
-🧱 Dimension Tables
+### Dimension Tables
 
 Dimensions store descriptive attributes and use surrogate keys for analytical joins.
 
@@ -133,7 +133,7 @@ Used by:
 
 fact_order_items
 
-📊 Fact Tables
+### Fact Tables
 
 Fact tables store transactional and event-level data.
 Each fact table maintains a clearly defined grain and references dimensions via surrogate keys where applicable.
@@ -220,29 +220,17 @@ fact_orders via order_id
 
 4. gold.fact_reviews
 
-Grain: One row per review
+Grain: One row per review (1 order_id has many reviews in reviews tbl) -- 1:M Relationship
 
 Purpose: Captures customer feedback and satisfaction
 
-Keys:
+Keys:review_id, order_id
 
-review_id
+Measures / Attributes:Review score, Comments, Review creation and response timestamps
 
-order_id
+Connected to: fact_orders via order_id
 
-Measures / Attributes:
-
-Review score
-
-Comments
-
-Review creation and response timestamps
-
-Connected to:
-
-fact_orders via order_id
-
-🔗 Relationships & Grain Alignment
+### Relationships & Grain Alignment
 
 Orders act as a central business process linking:
 
@@ -256,11 +244,11 @@ Reviews
 
 Order items connect products and sellers at the most detailed transactional level.
 
-Dimensions are never joined directly to each other — only through facts.
+Dimensions are never joined directly to each other — joined only through facts.
 
 Surrogate keys are used only in dimensions and facts, never in the Silver layer.
 
-✅ Design Principles Applied
+### Design Principles Applied
 
 Clear grain definition for every fact table
 
@@ -274,7 +262,7 @@ Referential integrity validated via data quality checks
 
 Optimized for BI tools and SQL-based analytics
 
-🏁 Summary
+### Summary
 
 This dimensional model accurately reflects real-world e-commerce processes and supports advanced analytics such as:
 
@@ -288,7 +276,7 @@ Payment method and installment analysis
 
 The use of a Fact Constellation schema ensures scalability, clarity, and professional-grade data warehouse design.
 
-## 🗂 Repository Structure
+##  Repository Structure
 
 ```text
 datasets/        → Source data
