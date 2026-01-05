@@ -85,17 +85,11 @@ Surrogate Key: customer_key
 
 Business Key: customer_id
 
-Attributes:
+Attributes:Customer identifiers, Geographic details (city, state, zip)
 
-Customer identifiers
+Used by:fact_orders
 
-Geographic details (city, state, zip)
-
-Used by:
-
-fact_orders
-
-2. gold.dim_products
+### 2. gold.dim_products
 
 Grain: One row per product
 
@@ -103,19 +97,11 @@ Surrogate Key: product_key
 
 Business Key: product_id
 
-Attributes:
+Attributes:Product category, Physical characteristics (weight, dimensions), Metadata for product analysis
 
-Product category
+Used by:fact_order_items
 
-Physical characteristics (weight, dimensions)
-
-Metadata for product analysis
-
-Used by:
-
-fact_order_items
-
-3. gold.dim_sellers
+### 3. gold.dim_sellers
 
 Grain: One row per seller
 
@@ -123,50 +109,26 @@ Surrogate Key: seller_key
 
 Business Key: seller_id
 
-Attributes:
+Attributes:Seller location, Geographic enrichment using aggregated geolocation data
 
-Seller location
+Used by:fact_order_items
 
-Geographic enrichment using aggregated geolocation data
-
-Used by:
-
-fact_order_items
-
-### Fact Tables
+## Fact Tables
 
 Fact tables store transactional and event-level data.
 Each fact table maintains a clearly defined grain and references dimensions via surrogate keys where applicable.
 
-1. gold.fact_orders
+### 1. gold.fact_orders
 
 Grain: One row per order
 
 Purpose: Tracks order lifecycle and delivery performance
 
-Keys:
+Keys:order_id (degenerate dimension), customer_key (FK to dim_customers)
 
-order_id (degenerate dimension)
+Measures / Indicators:Order status, Timestamps (purchase, approval, delivery), Delivery delay flags and duration metrics
 
-customer_key (FK to dim_customers)
-
-Measures / Indicators:
-
-Order status
-
-Timestamps (purchase, approval, delivery)
-
-Delivery delay flags and duration metrics
-
-Connected to:
-
-Customers
-
-Payments
-
-Reviews
-
-Order items
+Connected to:Customers, Payments, Reviews, Order items
 
 2. gold.fact_order_items
 
@@ -174,23 +136,9 @@ Grain: One row per order item
 
 Purpose: Captures line-level sales and logistics details
 
-Keys:
+Keys:order_id, order_item_id, product_key (FK), seller_key (FK)
 
-order_id
-
-order_item_id
-
-product_key (FK)
-
-seller_key (FK)
-
-Measures:
-
-Item price
-
-Freight value
-
-Shipping limit date
+Measures:Item price, Freight value, Shipping limit date
 
 This table represents the core sales fact of the model.
 
@@ -200,23 +148,11 @@ Grain: One row per payment record per order
 
 Purpose: Captures payment behavior and methods
 
-Keys:
+Keys:order_id
 
-order_id
+Measures / Attributes:Payment type, Installments, Payment value, Payment sequence
 
-Measures / Attributes:
-
-Payment type
-
-Installments
-
-Payment value
-
-Payment sequence
-
-Connected to:
-
-fact_orders via order_id
+Connected to:fact_orders via order_id
 
 4. gold.fact_reviews
 
@@ -248,7 +184,7 @@ Dimensions are never joined directly to each other — joined only through facts
 
 Surrogate keys are used only in dimensions and facts, never in the Silver layer.
 
-### Design Principles Applied
+## Design Principles Applied
 
 Clear grain definition for every fact table
 
@@ -262,7 +198,7 @@ Referential integrity validated via data quality checks
 
 Optimized for BI tools and SQL-based analytics
 
-### Summary
+## Summary
 
 This dimensional model accurately reflects real-world e-commerce processes and supports advanced analytics such as:
 
