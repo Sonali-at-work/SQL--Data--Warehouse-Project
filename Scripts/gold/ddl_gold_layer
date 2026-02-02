@@ -21,19 +21,27 @@ Usage These views can be queired directly for analytics and reporting.
 -- avg(lat) and avg(long) -averaging them as there exist multiple entries in geolocation table for same zip code ,city and state causing granularity issue upon joining with the sellers dataset.
 -- Then creating new physical table with the transformed rows.
 -- This geolocation table will be used with seller table as join to obtain one dimension table.
-IF OBJECT_ID('silver.olist_geolocations','U') IS NOT NULL
-   DROP TABLE silver.olist_geolocations
+-- Drop existing Gold table if it exists
+IF OBJECT_ID('gold.olist_geolocation', 'U') IS NOT NULL
+   DROP TABLE gold.olist_geolocation;
 GO
-SELECT 
-	geolocation_zip_code_prefix,
-	avg(geolocation_lat)as latitude,
-	avg(geolocation_lng)as longitude,
-	geolocation_city,
-	geolocation_state 
-into silver.olist_geolocations
-from silver.olist_geolocation 
-	group by  geolocation_zip_code_prefix,geolocation_city,geolocation_state
 
+-- Aggregate and create Gold table
+SELECT 
+    geolocation_zip_code_prefix,
+    AVG(geolocation_lat) AS latitude,
+    AVG(geolocation_lng) AS longitude,
+    geolocation_city,
+    geolocation_state
+INTO gold.olist_geolocation
+FROM silver.olist_geolocation   -- <--- read from Silver
+GROUP BY geolocation_zip_code_prefix, geolocation_city, geolocation_state;
+GO
+
+
+IF OBJECT_ID('gold.dim_sellers','V') IS NOT NULL
+   DROP View gold.dim_sellers
+GO
 create view gold.dim_sellers as
 select 
     row_number() over(order by seller_id)as seller_key,
@@ -49,6 +57,10 @@ select
 from silver.olist_sellers s left join silver.olist_geolocations g 
 on s.seller_zip_code_prefix=g.geolocation_zip_code_prefix
 
+Go
+IF OBJECT_ID('gold.dim_products','V') IS NOT NULL
+   DROP View gold.dim_products
+GO
 create view gold.dim_products as
 select 
 	row_number() over(order by product_id) as product_key,
@@ -63,7 +75,11 @@ select
 	p.product_width_cm as width_in_cm
 from silver.olist_products p left join silver.product_category_translation pc on
 p.product_category_name=pc.product_category_name
+GO
 
+IF OBJECT_ID('gold.dim_customers','V') IS NOT NULL
+   DROP View gold.dim_customers
+GO
 Create View gold.dim_customers as
 select 
     row_number() over(order by customer_id)as customer_key,
@@ -74,6 +90,7 @@ select
 	customer_state 
 from silver.olist_customers
 
+GO
 --=============================================
            -- Fact tables --
 --=============================================
@@ -82,6 +99,9 @@ from silver.olist_customers
 --rearranging column
 --renaming them 
 --create surrogate keys
+IF OBJECT_ID('gold.fact_orders','v') IS NOT NULL
+   DROP View gold.fact_orders
+GO
 Create view gold.fact_orders as
 select 
 	o.order_id,
@@ -100,7 +120,10 @@ select
 from  silver.olist_orders o  left join  gold.dim_customers c
 on o.customer_id=c.customer_id 
 
-
+GO
+IF OBJECT_ID('gold.fact_order_items','V') IS NOT NULL
+   DROP View gold.fact_order_items
+GO
 create view gold.fact_order_items as
 select 
 oi.order_id,
@@ -113,6 +136,10 @@ oi.freight_value
 from silver.olist_order_items oi join gold.dim_products p on oi.product_id=p.product_id left
 join gold.dim_sellers s on  oi.seller_id=s.seller_id
 
+GO
+IF OBJECT_ID('gold.fact_reviews','V') IS NOT NULL
+   DROP View gold.fact_reviews
+GO
 Create view gold.fact_reviews as
 select 
 review_id,
@@ -124,6 +151,10 @@ review_creation_date as creation_date,
 review_answer_timestamp as aswer_timestamp
 from silver.olist_order_reviews
 
+GO
+IF OBJECT_ID('gold.fact_payments','V') IS NOT NULL
+   DROP View gold.fact_payments
+GO
 create view gold.fact_payments as
 select
 order_id,
@@ -132,4 +163,3 @@ payment_type as type,
 payment_installments as installment,
 payment_value as value
 from silver.olist_order_payments
-
