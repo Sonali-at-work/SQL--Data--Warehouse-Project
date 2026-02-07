@@ -1,4 +1,18 @@
+/*
+====================================================
+DDL Create Gold views
+====================================================
+Script Purpose:
+This script creates views for the gold layer in the data warehouse.
+The gold layer represents the final dimensions and fact tables (Fact Constellation Schema).
 
+Each view performs transformations and combines data from the silver layer to produce clean,
+enriched and business ready dataset
+
+Usage These views can be queired directly for analytics and reporting.
+
+==============================================================================================
+*/
 --=================================================
            -- Dimension tables
 --=================================================
@@ -151,3 +165,4 @@ on s.seller_zip_code_prefix=g.geolocation_zip_code_prefix
 
 select seller_zip_code_prefix ,count(*) from silver.olist_sellers group by seller_zip_code_prefix having count(*)>1
 select geolocation_zip_code_prefix ,count(*) from silver.olist_geolocations group by geolocation_zip_code_prefix having count(*)>1
+
